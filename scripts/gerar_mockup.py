@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Gerador de mockups de UI do Faísca.
+Gerador de mockups de UI do Faísca — visual inspirado nos design tokens
+abertos do Cloudscape (AWS, licença Apache 2.0): azul primário, Open Sans,
+cantos de 8px, espaçamento em múltiplos de 4px. Agora renderiza um console
+completo (cabeçalho + menu lateral + conteúdo), não só um cartão solto.
 
 Em vez de pedir pra uma IA "desenhar" uma tela (o que sai com texto ilegível
 e layout quebrado), este script monta HTML/CSS real a partir de uma lista de
-campos, usando um design system simples e consistente. O resultado é:
+campos. O resultado é:
   - um arquivo .html (reaproveitável, pode ser aberto e ajustado)
   - um arquivo .png (screenshot tirado com Playwright, pra visualizar rápido)
 
@@ -28,145 +31,249 @@ from pathlib import Path
 
 CSS = """
 :root {
-  --bg: #f4f5f7;
+  /* Tokens no espírito do Cloudscape (AWS, Apache 2.0): azul primário,
+     Open Sans, raio de 8px, espaçamento em múltiplos de 4px. */
+  --bg: #f2f3f3;
   --surface: #ffffff;
-  --border: #e2e4e9;
-  --text: #1c1d21;
-  --text-muted: #6b7076;
-  --primary: #5b5bf0;
+  --border: #e9ebed;
+  --border-strong: #d1d5db;
+  --text: #16191f;
+  --text-muted: #5f6b7a;
+  --primary: #0972d3;
+  --primary-hover: #075fb0;
   --primary-text: #ffffff;
-  --radius: 10px;
-  --shadow: 0 1px 2px rgba(16, 17, 20, 0.04), 0 4px 10px rgba(16, 17, 20, 0.04);
-  --font: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgba(15, 20, 28, 0.06), 0 2px 8px rgba(15, 20, 28, 0.05);
+  --font: "Open Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --topbar-bg: #0f1b2a;
+  --topbar-text: #d4dde8;
+  --sidebar-bg: #ffffff;
+  --sidebar-active-bg: #f0f7ff;
+  --success-bg: #e9f7ea; --success-text: #16794b;
+  --neutral-bg: #eef0f2; --neutral-text: #5f6b7a;
 }
 * { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
 body {
-  margin: 0;
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
-  display: flex;
-  justify-content: center;
-  padding: 40px 20px;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* ---------- console shell ---------- */
+.console { display: flex; flex-direction: column; height: 800px; width: 1280px; overflow: hidden; }
+
+.topbar {
+  height: 52px;
+  flex: 0 0 auto;
+  background: var(--topbar-bg);
+  color: var(--topbar-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+.topbar .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: #fff; }
+.topbar .brand .dot { width: 8px; height: 8px; border-radius: 2px; background: var(--primary); display: inline-block; }
+.topbar .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--topbar-text); }
+.topbar .avatar {
+  width: 26px; height: 26px; border-radius: 50%; background: #233447;
+  display: flex; align-items: center; justify-content: center; font-size: 11px; color: #cfd8e3;
+}
+
+.shell { flex: 1 1 auto; display: flex; min-height: 0; }
+
+.sidebar {
+  width: 220px;
+  flex: 0 0 auto;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+  overflow-y: auto;
+}
+.sidebar ul { list-style: none; margin: 0; padding: 0; }
+.sidebar li {
+  padding: 9px 20px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  border-left: 3px solid transparent;
+  cursor: default;
+}
+.sidebar li.active {
+  color: var(--primary);
+  font-weight: 600;
+  background: var(--sidebar-active-bg);
+  border-left-color: var(--primary);
+}
+
+.content { flex: 1 1 auto; overflow-y: auto; padding: 28px 32px; }
+
+/* ---------- card (a "tela" em si, dentro do console) ---------- */
 .tela {
   width: 100%;
-  max-width: 560px;
+  max-width: 760px;
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
   overflow: hidden;
 }
-.tela.larga { max-width: 860px; }
+.tela.larga { max-width: 100%; }
+
 .cabecalho {
-  padding: 24px 28px 20px;
+  padding: 20px 24px 16px;
   border-bottom: 1px solid var(--border);
+}
+.cabecalho .trilha {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+  letter-spacing: 0.01em;
 }
 .cabecalho h1 {
   margin: 0;
-  font-size: 19px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--text);
 }
 .cabecalho p {
   margin: 4px 0 0;
   font-size: 13px;
   color: var(--text-muted);
 }
-.corpo { padding: 24px 28px 28px; }
-.campo { margin-bottom: 18px; }
+.corpo { padding: 24px; }
+.campo { margin-bottom: 16px; }
 .campo label {
   display: block;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   margin-bottom: 6px;
   color: var(--text);
 }
 .campo input, .campo textarea, .campo select {
   width: 100%;
-  padding: 10px 12px;
+  padding: 9px 12px;
   font-size: 14px;
   font-family: inherit;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: #fbfbfc;
   color: var(--text-muted);
 }
+.campo input:focus, .campo textarea:focus, .campo select:focus { outline: none; border-color: var(--primary); }
 .campo textarea { resize: none; height: 72px; }
+
 .rodape {
-  padding: 18px 28px;
+  padding: 16px 24px;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 .btn {
-  padding: 9px 18px;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: default;
   font-family: inherit;
 }
 .btn-principal { background: var(--primary); color: var(--primary-text); }
-.btn-secundario { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secundario { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
 
+/* ---------- tabela / lista ---------- */
+.filtros { display: flex; gap: 8px; padding: 16px 24px 0; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--sidebar-active-bg); color: var(--primary);
+  font-size: 12px; font-weight: 600; border: 1px solid #cfe3fa;
+}
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th {
   text-align: left;
-  padding: 10px 12px;
-  font-size: 12px;
+  padding: 10px 16px;
+  font-size: 11.5px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
+  background: #fafbfb;
   border-bottom: 1px solid var(--border);
-  font-weight: 600;
+  font-weight: 700;
 }
 td {
-  padding: 11px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
 tr:last-child td { border-bottom: none; }
 .pill {
   display: inline-block;
-  padding: 2px 9px;
+  padding: 2px 10px;
   border-radius: 999px;
   font-size: 11.5px;
-  font-weight: 500;
-  background: #eef0ff;
-  color: var(--primary);
+  font-weight: 600;
 }
+.pill.ativo { background: var(--success-bg); color: var(--success-text); }
+.pill.neutro { background: var(--neutral-bg); color: var(--neutral-text); }
 
+/* ---------- empty state ---------- */
+.empty-state {
+  padding: 56px 24px;
+  text-align: center;
+}
+.empty-state .icone {
+  width: 40px; height: 40px; margin: 0 auto 12px;
+  border-radius: 50%; background: var(--neutral-bg);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 18px; font-weight: 700;
+}
+.empty-state h2 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--text); }
+.empty-state p { margin: 0; font-size: 13px; color: var(--text-muted); }
+
+/* ---------- dashboard (kpis) ---------- */
 .grade-kpi {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
 }
 .kpi {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 18px;
-  background: #fbfbfc;
+  padding: 18px 20px;
+  background: var(--surface);
+  border-top: 3px solid var(--primary);
 }
-.kpi .valor { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
-.kpi .label { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.kpi .valor { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+.kpi .label { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
 
+/* ---------- detalhe ---------- */
 .detalhe-linha {
   display: flex;
   justify-content: space-between;
-  padding: 13px 0;
+  padding: 13px 24px;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
 }
 .detalhe-linha:last-child { border-bottom: none; }
 .detalhe-linha .rotulo { color: var(--text-muted); }
-.detalhe-linha .valor { font-weight: 500; text-align: right; }
+.detalhe-linha .valor { font-weight: 600; text-align: right; color: var(--text); }
 """
 
 TIPOS_INPUT = {"email", "tel", "number", "date", "password"}
+
+NAV_ITEMS = ["Visão geral", "Pedidos", "Relatórios", "Configurações"]
+NAV_ATIVO_POR_TIPO = {
+    "formulario": "Pedidos",
+    "lista": "Pedidos",
+    "dashboard": "Visão geral",
+    "detalhe": "Pedidos",
+}
 
 
 def slugify(texto: str) -> str:
@@ -198,6 +305,15 @@ def parse_campos(bruto: str) -> list[tuple[str, str]]:
     return campos
 
 
+def montar_navegacao(tipo: str) -> str:
+    ativo = NAV_ATIVO_POR_TIPO.get(tipo, NAV_ITEMS[0])
+    itens = []
+    for item in NAV_ITEMS:
+        classe = ' class="active"' if item == ativo else ""
+        itens.append(f"<li{classe}>{html.escape(item)}</li>")
+    return "\n".join(itens)
+
+
 def montar_formulario(campos: list[tuple[str, str]]) -> str:
     blocos = []
     for label, tipo in campos:
@@ -214,7 +330,30 @@ def montar_formulario(campos: list[tuple[str, str]]) -> str:
     return "\n".join(blocos)
 
 
+def eh_vazio(campos: list[tuple[str, str]]) -> bool:
+    """Detecta pedido de empty state: tipo 'empty' em algum campo, ou único campo é a mensagem."""
+    return any(tipo.lower() in ("empty", "empty-state", "vazio") for _, tipo in campos)
+
+
 def montar_lista(campos: list[tuple[str, str]], linhas: int = 4) -> str:
+    if eh_vazio(campos):
+        # campos[0] = (mensagem_principal, "empty"), campos[1:] = chips de filtro (rotulo:valor)
+        mensagem = campos[0][0] if campos else "Nenhum registro encontrado."
+        chips = campos[1:]
+        chips_html = ""
+        if chips:
+            itens = "".join(
+                f'<span class="chip">{html.escape(l)}: {html.escape(v)}</span>' for l, v in chips
+            )
+            chips_html = f'<div class="filtros">{itens}</div>'
+        return (
+            f'{chips_html}'
+            f'<div class="empty-state">'
+            f'<div class="icone">!</div>'
+            f'<h2>{html.escape(mensagem)}</h2>'
+            f'<p>A sua busca não retornou registros.</p>'
+            f'</div>'
+        )
     ths = "".join(f"<th>{html.escape(label)}</th>" for label, _ in campos)
     trs = []
     for i in range(1, linhas + 1):
@@ -223,9 +362,9 @@ def montar_lista(campos: list[tuple[str, str]], linhas: int = 4) -> str:
             if j == 0:
                 tds.append(f"<td>{html.escape(label)} {i:02d}</td>")
             elif tipo.lower() == "status":
-                tds.append('<td><span class="pill">Ativo</span></td>')
+                tds.append('<td><span class="pill ativo">Ativo</span></td>')
             else:
-                tds.append(f"<td>—</td>")
+                tds.append("<td>—</td>")
         trs.append(f"<tr>{''.join(tds)}</tr>")
     return f"<table><thead><tr>{ths}</tr></thead><tbody>{''.join(trs)}</tbody></table>"
 
@@ -256,6 +395,7 @@ def montar_detalhe(campos: list[tuple[str, str]]) -> str:
 def gerar_html(titulo: str, descricao: str, tipo: str, campos: list[tuple[str, str]],
                botao_principal: str, botao_secundario: str) -> str:
     larga = " larga" if tipo in ("lista", "dashboard") else ""
+    vazio = tipo == "lista" and eh_vazio(campos)
     if tipo == "formulario":
         corpo = montar_formulario(campos)
     elif tipo == "lista":
@@ -268,7 +408,7 @@ def gerar_html(titulo: str, descricao: str, tipo: str, campos: list[tuple[str, s
         raise ValueError(f"tipo desconhecido: {tipo}")
 
     rodape = ""
-    if botao_principal or botao_secundario:
+    if not vazio and (botao_principal or botao_secundario):
         btns = ""
         if botao_secundario:
             btns += f'<button class="btn btn-secundario">{html.escape(sentence_case(botao_secundario))}</button>'
@@ -277,6 +417,7 @@ def gerar_html(titulo: str, descricao: str, tipo: str, campos: list[tuple[str, s
         rodape = f'<div class="rodape">{btns}</div>'
 
     desc_html = f"<p>{html.escape(descricao)}</p>" if descricao else ""
+    nav_html = montar_navegacao(tipo)
 
     return f"""<!doctype html>
 <html lang="pt-BR">
@@ -287,30 +428,41 @@ def gerar_html(titulo: str, descricao: str, tipo: str, campos: list[tuple[str, s
 <style>{CSS}</style>
 </head>
 <body>
-  <div class="tela{larga}">
-    <div class="cabecalho">
-      <h1>{html.escape(titulo)}</h1>
-      {desc_html}
+  <div class="console">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span> Console</div>
+      <div class="topbar-right">
+        <span>PT-BR</span>
+        <div class="avatar">U</div>
+      </div>
+    </header>
+    <div class="shell">
+      <nav class="sidebar"><ul>{nav_html}</ul></nav>
+      <main class="content">
+        <div class="tela{larga}">
+          <div class="cabecalho">
+            <h1>{html.escape(titulo)}</h1>
+            {desc_html}
+          </div>
+          <div class="corpo">{corpo}</div>
+          {rodape}
+        </div>
+      </main>
     </div>
-    <div class="corpo">{corpo}</div>
-    {rodape}
   </div>
 </body>
 </html>"""
 
 
-def tirar_screenshot(caminho_html: Path, caminho_png: Path, largo: bool) -> None:
+def tirar_screenshot(caminho_html: Path, caminho_png: Path) -> None:
     from playwright.sync_api import sync_playwright
 
-    largura = 960 if largo else 640
     with sync_playwright() as p:
         navegador = p.chromium.launch()
-        pagina = navegador.new_page(viewport={"width": largura, "height": 100})
+        pagina = navegador.new_page(viewport={"width": 1280, "height": 800})
         pagina.goto(f"file://{caminho_html.resolve()}")
         pagina.wait_for_timeout(150)
-        # Screenshot só do cartão (.tela), não da página toda: evita margem em branco
-        # quando o conteúdo é menor que a altura padrão da viewport.
-        pagina.locator(".tela").screenshot(path=str(caminho_png))
+        pagina.screenshot(path=str(caminho_png))
         navegador.close()
 
 
@@ -349,7 +501,7 @@ def main():
 
     if not args.sem_screenshot:
         caminho_png = base.with_suffix(".png")
-        tirar_screenshot(caminho_html, caminho_png, largo=args.tipo in ("lista", "dashboard"))
+        tirar_screenshot(caminho_html, caminho_png)
         print(f"PNG gerado: {caminho_png}")
 
 
