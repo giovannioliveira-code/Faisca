@@ -19,7 +19,7 @@ on:
           - dashboard
           - detalhe
       campos:
-        description: 'Campos, separados por vírgula. Formulário/lista: "Rótulo:tipo" (text, email, tel, textarea, select, status). Dashboard/detalhe: "Rótulo:valor".'
+        description: 'Campos, separados por vírgula. Formulário/lista: "Rótulo:tipo" (text, email, tel, textarea, select, status). Dashboard/detalhe: "Rótulo:valor". Empty state: "Mensagem:empty,Rótulo do filtro:valor".'
         required: true
         type: string
       descricao:
@@ -61,52 +61,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
 
-      - name: Instalar dependências
-        run: |
-          pip install playwright
-          playwright install --with-deps chromium
+      - name: Cache do navegador (Playwright)
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-chromium-v1
+
+      - name: Instalar dependências Python
+        run: pip install -r scripts/requirements.txt
+
+      - name: Instalar navegador (Playwright)
+        run: playwright install --with-deps chromium
 
       - name: Gerar mockup
         id: gerar
         run: |
           set -e
-          SAIDA=$(python3 - <<'PY'
-          import os, re, unicodedata
-          from datetime import datetime
-
-          titulo = os.environ["IN_TITULO"]
-          slug = unicodedata.normalize("NFKD", titulo).encode("ascii", "ignore").decode()
-          slug = re.sub(r"[^a-zA-Z0-9]+", "-", slug).strip("-").lower() or "tela"
-          carimbo = datetime.now().strftime("%Y%m%d-%H%M%S")
-          print(f"mockups/{slug}-{carimbo}")
-          PY
-          )
-          echo "saida=${SAIDA}" >> "$GITHUB_OUTPUT"
-
-          python3 scripts/gerar_mockup.py \
-            --titulo "$IN_TITULO" \
-            --tipo "$IN_TIPO" \
-            --campos "$IN_CAMPOS" \
-            --descricao "$IN_DESCRICAO" \
-            --botao-principal "$IN_BOTAO_PRINCIPAL" \
-            --botao-secundario "$IN_BOTAO_SECUNDARIO" \
-            --saida "${SAIDA}"
-
-      - name: Commitar mockup gerado
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${{ steps.gerar.outputs.saida }}.html" "${{ steps.gerar.outputs.saida }}.png"
-          git commit -m "Mockup gerado via Faisca"
-          git push
-
-      - name: Resumo
-        run: |
-          {
-            echo "### Mockup gerado"
-            echo "- **Tipo:** ${IN_TIPO}"
-            echo "- **Arquivos:** \`${{ steps.gerar.outputs.saida }}.html\` e \`.png\`"
-            echo ""
-            echo "![mockup](${{ steps.gerar.outputs.saida }}.png)"
-          } >> "$GITHUB_STEP_SUMMARY"
+          SAIDA=$(python3 -
